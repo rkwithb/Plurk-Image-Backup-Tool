@@ -7,6 +7,12 @@
 <a name="english"></a>
 ## English Description
 This is a smart tool to organize your Plurk JS backup files into date-based folders with EXIF support.
+- **Current Interface**: Traditional Chinese (繁體中文) only.
+- **English Support**: Planned for future updates.
+
+> **🌍 Internationalization (i18n)**
+> The English version of the manual is being integrated directly into the tool. 
+> I am currently working on an English interface for the program. Stay tuned!
 👉 **[View Full Manual (English)](https://htmlpreview.github.io/?https://github.com/rkwithb/Plurk-Image-Backup-Tool/blob/main/README_EN.html)**
 
 ---
