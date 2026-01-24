@@ -1,0 +1,7 @@
+__pycache__/
+build/
+dist/
+*.spec
+*.js
+data/
+噗浪JS圖片備份_精確分類/
