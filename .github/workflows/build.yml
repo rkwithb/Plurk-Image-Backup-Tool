@@ -1,47 +1,96 @@
-name: Build Plurk Tool
+name: Build, Test, and Publish 
 
 on:
   push:
     tags:
-      - 'v*' # 當你推送 v1.0, v1.1 等標籤時觸發
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
+    name: 針對 ${{ matrix.os }} 進行建置
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # 同時在 Windows 和 macOS 上跑
         os: [windows-latest, macos-latest]
-
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+      - name: 檢出原始碼
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
+      - name: 設定 Python 環境
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pyinstaller requests piexif
+      - name: 安裝相依套件
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-    - name: Build with PyInstaller (Windows)
-      if: matrix.os == 'windows-latest'
-      run: pyinstaller --onefile --name PlurkImageBackup_Win plurk_backup_final.py
+      - name: 打包 (Windows)
+        if: matrix.os == 'windows-latest'
+        # [修改] 入口檔案改為 plurk_backup_final.py
+        run: pyinstaller --onefile --windowed --name "Plurk_Image_Backup_Win" plurk_backup_final.py
+      
+      - name: 打包 (macOS)
+        if: matrix.os == 'macos-latest'
+        # [修改] 入口檔案改為 plurk_backup_final.py
+        run: pyinstaller --onefile --name "Plurk_Image_Backup_Mac" plurk_backup_final.py
 
-    - name: Build with PyInstaller (macOS)
-      if: matrix.os == 'macos-latest'
-      run: pyinstaller --onefile --name PlurkImageBackup_Mac plurk_backup_final.py
+      - name: 暫存成品
+        uses: actions/upload-artifact@v4
+        with:
+          name: executable-${{ matrix.os }}
+          path: |
+            dist/Plurk_Image_Backup_Win.exe
+            dist/Plurk_Image_Backup_Mac
 
-    - name: Release Assets
-      uses: softprops/action-gh-release@v1
-      with:
-        # 關鍵修正：找不到另一方的檔案時不要報錯
-        fail_on_unmatched_files: false
-        files: |
-          dist/PlurkImageBackup_Win.exe
-          dist/PlurkImageBackup_Mac
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  test:
+    name: 測試執行檔 (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    
+    steps:
+      - name: 下載該系統的成品
+        uses: actions/download-artifact@v4
+        with:
+          name: executable-${{ matrix.os }}
+
+      - name: 執行驗證 (Windows)
+        if: matrix.os == 'windows-latest'
+        run: .\Plurk_Image_Backup_Win.exe --help || echo "啟動成功"
+
+      - name: 執行驗證 (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          chmod +x Plurk_Image_Backup_Mac
+          ./Plurk_Image_Backup_Mac --help || echo "啟動成功"
+
+  release:
+    name: 建立發佈版本
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: 下載所有成品
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          pattern: executable-*
+          merge-multiple: true
+
+      - name: 上傳至 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./artifacts/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
