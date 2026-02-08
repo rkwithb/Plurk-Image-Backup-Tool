@@ -10,21 +10,33 @@ import io
 
 # ==========================================
 # I/O 強健性初始化 (Robustness Initialization)
-# 放在這裡可以確保後續所有 print() 與全域變數處理都套用此設定
 # ==========================================
-# 提升 Robustness：處理編碼與無視窗模式下的 NoneType 錯誤
 if sys.platform == "win32":
     if sys.stdout is not None and hasattr(sys.stdout, 'buffer'):
         try:
-            # 強制使用 UTF-8 並開啟行緩衝
+            # 強制使用 UTF-8 並開啟行緩衝，防止 Windows 環境編碼崩潰
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
         except Exception:
             pass
     elif sys.stdout is None:
-        # 防止 --windowed 模式下 print 崩潰
+        # 防止 --windowed 模式或無控制台環境下 print 崩潰
         sys.stdout = open(os.devnull, 'w')
 
-# 嘗試匯入 piexif，讓功能變成「選配」，增加程式的靈活性 (Flexible)
+def safe_input(prompt, default="n"):
+    """
+    強健的輸入函式：
+    1. 偵測是否為 TTY (互動式終端機)，若非互動環境則直接回傳預設值（解決 GitHub Actions 報錯）。
+    2. 捕捉 EOFError 與 OSError，防止程式在意外中斷時崩潰。
+    """
+    try:
+        # 檢查標準輸入是否連接到終端機
+        if not sys.stdin or not sys.stdin.isatty():
+            return default
+        return input(prompt).lower()
+    except (EOFError, OSError):
+        return default
+
+# 嘗試匯入 piexif，讓功能變成「選配」
 try:
     import piexif
     PIEXIF_AVAILABLE = True
@@ -39,8 +51,6 @@ RESPONSES_DIR = Path("data/responses")
 # 正規表示式：排除官方貼圖，抓取一般圖檔
 PLURK_EMOJI_PATTERN = re.compile(r'https://images\.plurk\.com/mx_')
 GENERAL_IMAGE_PATTERN = re.compile(r'https?://[^\s"\'\\]+\.(?:jpg|png|gif|jpeg)', re.IGNORECASE)
-
-
 
 def get_all_valid_images(text_content):
     """擷取有效圖片連結，排除官方表情與系統圖"""
@@ -58,32 +68,28 @@ def get_all_valid_images(text_content):
     return valid_urls
 
 def write_exif_time(file_path, dt_obj):
-    """
-    聰明的 EXIF 檢查機制：
-    只有在時間空白或與噗文時間不一致時，才執行覆寫（Overwrite）。
-    """
+    """只有在時間空白或不一致時，才執行 EXIF 覆寫"""
     if not PIEXIF_AVAILABLE or file_path.suffix.lower() not in ['.jpg', '.jpeg']:
         return False
     try:
         target_time_str = dt_obj.strftime("%Y:%m:%d %H:%M:%S")
         exif_dict = piexif.load(str(file_path))
-
         # 取得拍攝日期欄位 (DateTimeOriginal)
         current_time = exif_dict.get("Exif", {}).get(piexif.ExifIFD.DateTimeOriginal)
         current_time_str = current_time.decode('utf-8') if isinstance(current_time, bytes) else current_time
+
 
         # 如果已經有一致的時間，就跳過不處理，節省時間
         if current_time_str == target_time_str:
             return False
 
-        # 更新/覆寫標頭時間
         print(f"  🕒 正在更新 EXIF 時間標頭: {file_path.name}")
         exif_dict["0th"][piexif.ImageIFD.DateTime] = target_time_str
         exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = target_time_str
         exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = target_time_str
+        piexif.insert(piexif.dump(exif_dict), str(file_path))
         #print(f"🕒 覆寫/校正 EXIF 標頭:",target_time_str,"/",str(file_path))
 
-        piexif.insert(piexif.dump(exif_dict), str(file_path))
         return True
     except:
         # 若原檔格式特殊或無 EXIF 區塊，則強制新建
@@ -96,12 +102,11 @@ def write_exif_time(file_path, dt_obj):
         except: return False
 
 def download_image(url, target_folder, dt_obj, do_exif):
-    """下載邏輯：支援靈活選擇是否處理 EXIF"""
+    """下載邏輯：支援選擇是否處理 EXIF"""
     file_name = url.split('/')[-1].split('?')[0]
     save_path = target_folder / file_name
     target_folder.mkdir(exist_ok=True, parents=True)
 
-    # 檢查檔案是否已存在，並根據 user 選擇決定是否更新 EXIF
     if save_path.exists():
         updated = write_exif_time(save_path, dt_obj) if do_exif else False
         return False, True, updated
@@ -117,7 +122,7 @@ def download_image(url, target_folder, dt_obj, do_exif):
     return False, False, False
 
 def parse_js_content(file_path):
-    """物理切割法：精確處理 BackupData 格式，刪除等號前字串"""
+    """精確處理 BackupData 格式"""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             raw_text = f.read().strip()
@@ -129,7 +134,7 @@ def parse_js_content(file_path):
     except: return []
 
 def _process_folder(source_dir, label, do_exif):
-    """掃描 JS 檔案並進行圖檔分類與處理"""
+    """掃描 JS 檔案並處理圖檔"""
     counts = {"dl": 0, "skip": 0, "exif": 0}
     if not source_dir.exists():
         print(f"⚠️ 找不到 {label} 資料夾，略過處理。")
@@ -162,11 +167,12 @@ def main():
     print("🚀 噗浪 JS 備份圖檔整理工具 (Flexible Version)")
 
     # EXIF 選擇邏輯
+    # 提升 Robustness: 使用 safe_input 代替原生 input
     do_exif = False
     if PIEXIF_AVAILABLE:
-        # 提供聰明的選擇機制
-        choice = input("👉 是否要檢查並補寫/覆蓋圖檔的 EXIF 時間標頭？(y/N): ").lower()
-        if choice == 'y': do_exif = True
+        choice = safe_input("👉 是否要檢查並補寫/覆蓋圖檔的 EXIF 時間標頭？(y/N): ")
+        if choice == 'y':
+            do_exif = True
     else:
         print("💡 提示：系統未安裝 piexif 模組，將改為純下載模式。")
 
