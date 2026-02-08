@@ -1,4 +1,4 @@
-name: Build, Test, and Publish 
+name: Build, Test, and Publish
 
 on:
   push:
@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [windows-latest, macos-latest]
-    
+
     steps:
       - name: 檢出原始碼
         uses: actions/checkout@v4
@@ -34,12 +34,11 @@ jobs:
 
       - name: 打包 (Windows)
         if: matrix.os == 'windows-latest'
-        # [修改] 入口檔案改為 plurk_backup_final.py
-        run: pyinstaller --onefile --windowed --name "Plurk_Image_Backup_Win" plurk_backup_final.py
-      
+        # [修正] 移除 --windowed 參數以確保 CLI 輸出正常
+        run: pyinstaller --onefile --name "Plurk_Image_Backup_Win" plurk_backup_final.py
+
       - name: 打包 (macOS)
         if: matrix.os == 'macos-latest'
-        # [修改] 入口檔案改為 plurk_backup_final.py
         run: pyinstaller --onefile --name "Plurk_Image_Backup_Mac" plurk_backup_final.py
 
       - name: 暫存成品
@@ -58,7 +57,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest]
-    
+
     steps:
       - name: 下載該系統的成品
         uses: actions/download-artifact@v4
@@ -67,13 +66,14 @@ jobs:
 
       - name: 執行驗證 (Windows)
         if: matrix.os == 'windows-latest'
-        run: .\Plurk_Image_Backup_Win.exe --help || echo "啟動成功"
+        # [修正] 移除 || echo，確保測試失敗時 GitHub Action 會報警
+        run: .\Plurk_Image_Backup_Win.exe --help
 
       - name: 執行驗證 (macOS)
         if: matrix.os == 'macos-latest'
         run: |
           chmod +x Plurk_Image_Backup_Mac
-          ./Plurk_Image_Backup_Mac --help || echo "啟動成功"
+          ./Plurk_Image_Backup_Mac --help
 
   release:
     name: 建立發佈版本
