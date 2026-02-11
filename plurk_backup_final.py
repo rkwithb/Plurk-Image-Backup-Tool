@@ -1,3 +1,6 @@
+# Copyright (c) 2026 rkwithb (https://github.com/rkwithb)
+# Licensed under CC BY-NC 4.0 (Non-Commercial Use Only)
+# Disclaimer: Use at your own risk. The author is not responsible for any damages.
 import os
 import re
 import json
