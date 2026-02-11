@@ -20,6 +20,13 @@ This is a smart tool to organize your Plurk JS backup files into date-based fold
 👉 **[查看詳細說明書 (繁體中文)](https://htmlpreview.github.io/?https://github.com/rkwithb/Plurk-Image-Backup-Tool/blob/main/README_TW.html)**
 
 ---
+
+## 🛠 深度開發資訊 (For Developers)
+
+1. Clone 本project至自己的電腦。
+2. 執行 `pip install -r requirements.txt` 安裝相依套件。
+
+---
 ## 授權條款 (License)
 本專案採用 CC BY-NC 4.0 授權，詳情請參閱 [LICENSE](LICENSE.md) 檔案。
 This project is licensed under the CC BY-NC 4.0. Please see the [LICENSE](LICENSE.md) file for more information.
